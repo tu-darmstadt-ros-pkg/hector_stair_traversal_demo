@@ -1,0 +1,190 @@
+<?xml version="1.0"?>
+
+<launch>
+  
+  <!-- 
+  Mission name is set in separate launch file, so it can be included
+  in different places
+  -->
+<!--  <include file="$(find hector_launch)/launch/mission_name.launch" />
+  
+  <arg name="use_smach" default="true"/>
+  -->
+  <arg name="use_ground_truth_for_tf" default="true"/>-->
+  
+  <group unless="$(optenv REALROBOT 0)">
+    
+    <!--      
+    <include file="$(find hector_launch)/launch/simulator.launch">
+    <arg name="use_ground_truth_for_tf" value="$(arg use_ground_truth_for_tf)"/>
+    </include>
+    -->
+    
+    <!-- publish fake state from ground_truth... -->
+    <group if="$(arg use_ground_truth_for_tf)">
+      <node pkg="topic_tools" type="relay" name="ground_truth_state_publisher" args="ground_truth/state state" />
+    
+      <node pkg="message_to_tf" type="message_to_tf" name="ground_truth_to_tf" output="screen">
+        <param name="frame_id" value="map" />
+        <param name="odometry_topic" value="ground_truth/state" />
+      </node>
+
+      <!-- use hector_mapping/pub_map_odom_transform for map->nav transformation -->
+      <param name="hector_mapping/pub_map_odom_transform" value="false"/>
+      <!--<param name="hector_mapping/odom_frame" value="odom"/>-->
+    
+      <node pkg="tf" type="static_transform_publisher" name="static_world_to_map_publisher" args="0 0 0 0 0 0 /world /map 100"/>
+      
+<!--      <include file="$(find hector_launch)/launch/mapping.launch">
+        <arg name="pub_map_odom_transform" value="false"/>
+        <arg name="use_tf_pose_start_estimate" value="true"/>        
+        <arg name="odom_frame" value="base_stabilized"/>
+        <arg name="scan_topic" value="scan_trash_mapped_away"/>
+      </include>  -->
+    </group>
+    
+    <!-- ...or start monstertruck_pose estimation -->
+    <group unless="$(arg use_ground_truth_for_tf)">
+      <include file="$(find monstertruck_pose_estimation)/launch/monstertruck_pose_estimation.launch" />
+      <node pkg="message_to_tf" type="message_to_tf" name="ground_truth_to_tf" output="screen">
+        <param name="frame_id" value="/world" />
+        <param name="odometry_topic" value="ground_truth/state" />
+        <param name="tf_prefix" value="ground_truth" />
+      </node>
+      
+      <!-- publish static map->nav transformation -->
+      <param name="hector_mapping/pub_map_odom_transform" value="false"/>
+      <node pkg="tf" type="static_transform_publisher" name="map_nav_broadcaster" args="0 0 0 0 0 0 map nav 100" />
+    </group>
+    
+<!--    <include file="$(find hector_launch)/launch/mapping.launch">        
+      <arg name="pub_map_odom_transform" value="$(arg use_ground_truth_for_tf)"/>
+      <arg name="scan_topic" value="scan_trash_mapped_away"/>
+    </include> -->      
+  </group>
+  
+  <!--<include file="$(find hector_mapping_known_poses)/launch/mapping_filter_veil_wall.launch" />-->
+  
+  <!--3D Mapping is elevation + costmapping Costmap used directly below-->
+  <!--<include file="$(find hector_launch)/launch/3d_mapping.launch" />-->
+  
+  <node name="relay_mid_lvl_map" pkg="topic_tools" type="relay" args="/worldmodel/grid_map_upper_body_level /map" />
+  
+  <include file="$(find hector_move_base)/launch/hector_move_base_bertl.launch">
+    <arg name="use_alternate_planner" value="false" />  
+  </include>
+    
+  <include file="$(find vehicle_controller)/launch/obelix_controller.launch" />
+  
+<!--  <include file="$(find hector_launch)/launch/worldmodel.launch" />-->
+  
+<!--  <include file="$(find hector_thermal_self_filter)/launch/thermal_self_filter_hector_ugv.launch" />-->
+<!--  
+  <group if="$(arg use_smach)">
+    <include file="$(find hector_launch)/launch/behavior.launch"/>
+  </group>
+  <group unless="$(arg use_smach)">
+    <include file="$(find hector_launch)/launch/sar.launch" />
+  </group>
+  <include file="$(find hector_launch)/launch/taskallocation.launch" />
+  -->
+  <!--
+  <include file="$(find hector_octomap_server)/launch/octomap_server_hector_ugv.launch" />
+  -->
+  <include file="$(find hector_centaur_onboard)/launch/lidar_proc.launch" />
+  
+  
+ <!--
+  ******************************************************************************************
+  Worldmodel stuff below
+  ******************************************************************************************
+  -->
+    <!--  <node pkg="vigir_worldmodel_main" type="worldmodel_main" name="worldmodel_main" output="screen" launch-prefix="gdb -ex run iiargs">-->
+  <node pkg="vigir_worldmodel_server" type="worldmodel_server_node" name="worldmodel_main" output="screen" respawn="true">
+    <!--<remap from="scan_cloud" to="scan_cloud_filtered"/>-->
+    <param name="aggregator_frames" value="/world /base_link" />
+    <param name="root_frame" value="/world" />
+    
+    <!--Will only start worldmodel when tf transforms between these and root are available-->
+    <param name="required_frames" value="/l_hand /r_hand" />
+    
+    <param name="octomap_save_folder" value="$(find vigir_worldmodel_server)/maps" />
+    <param name="use_external_octomap" value="true" />
+    <remap from="~/octomap_external_update" to="/move_group/octomap"/>
+    
+    <remap from="scan_cloud" to="/3d_cloud"/>
+    <remap from="scan_cloud_filtered" to="/3d_cloud_filtered"/>
+    <!--<remap from="syscommand" to="/flor/worldmodel/syscommand" /> -->
+  </node>
+  
+  <node pkg="vigir_filtered_localized_scan_utils" type="scan_to_clouds_pub_node" name="scan_to_clouds_pub_node" output="screen">
+    <remap from="~/scan" to="/move_group/scan_filtered_localized"/>
+    <remap from="~/cloud_out" to="/3d_cloud"/>
+    <remap from="~/cloud_self_filtered_out" to="/3d_cloud_filtered"/>
+  </node>
+  
+  
+  <!--
+  ******************************************************************************************
+  Dynamic map and customized costmap setup below
+  ******************************************************************************************
+  -->
+<!--  <node pkg="hector_mapping" type="hector_mapping" name="hector_height_mapping" output="screen">
+    <param name="scan_topic" value="laser1/scan" />
+    <param name="base_frame" value="base_stabilized" />
+    <param name="odom_frame" value="nav" />
+    
+    <param name="output_timing" value="false"/>
+    <param name="advertise_map_service" value="true"/>
+    <param name="use_tf_scan_transformation" value="true"/>
+    <param name="use_tf_pose_start_estimate" value="true"/>
+    <param name="pub_map_odom_transform" value="false"/>
+    <param name="map_with_known_poses" value="true"/>
+
+    <param name="map_pub_period" value="5.0"/>
+    <param name="update_factor_free" value="0.45"/>
+    <param name="update_factor_occupied" value="0.65"/>
+    
+     
+    
+    <param name="map_update_distance_thresh" value="0.0"/>
+    <param name="map_update_angle_thresh" value="0.0"/>
+    
+    <param name="map_resolution" value="0.05"/>
+    <param name="map_size" value="1024"/>
+    <param name="map_start_x" value="0.5"/>
+    <param name="map_start_y" value="0.5"/>
+    
+    <param name="laser_min_dist" value="0.6" />
+    <param name="laser_max_dist" value="10" />
+    <param name="laser_z_min_value" value="-0.2"/>
+    <param name="laser_z_max_value" value="0.4"/>
+
+    <remap from="map" to="dyn_map" />
+    <remap from="dynamic_map" to="height_map" />
+  </node>-->
+  
+<!--  <node pkg="hector_costmap" type="hector_costmap" name="hector_costmap" output="screen" respawn="false">
+    <param name="cost_map_topic" value="cost_map" />
+    <param name="map_frame_id" value="map" />
+    <param name="local_transform_frame_id" value="base_footprint" />
+    <param name="initial_free_cells_radius" value="0.3" />
+    <param name="update_radius" value="1.4"/>
+    <param name="costmap_pub_freq" value="4.0" />
+    <param name="sys_msg_topic" value="syscommand" />
+
+    <param name="use_grid_map" value="true" />
+    <param name="grid_map_topic" value="dyn_map" />    
+
+    <param name="use_dynamic_grid_map" value="true" />
+    <param name="dynamic_grid_map_topic" value="dynamic_update_map" />
+
+    <param name="use_elevation_map" value="false" />
+    <param name="elevation_map_topic" value="elevation_map_local" />
+
+    <param name="use_cloud_map" value="false" />
+    <param name="cloud_topic" value="openni/depth/points" />
+  </node>-->
+  
+</launch>
+

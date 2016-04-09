@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+
+<launch>
+  
+  <include file="$(find hector_nist_arena_worlds)/launch/stair_test_v1.launch">
+   </include>   
+
+  
+  <include file="$(find stair_traversal_launch)/launch/spawn_obelix_default_with_controllers_for_stairs_driving.launch" />
+  
+  <!--<include file="$(find stair_traversal_onboard_launch)/launch/onboard_reduced_obelix.launch" />-->
+</launch>
+

@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+
+<launch>
+  
+  <include file="$(find hector_tracked_vehicles_launch)/launch/spawn_obelix_default.launch"/>
+  
+  <!--<include file="$(find hector_centaur_gazebo)/launch/centaur_default_controllers.launch"/> -->
+  
+  
+  <!-- Special treatment for stair_detection in simulation -->
+  <include file="$(find hector_stair_detection)/launch/hector_stair_detection_hector_with_scan_aggregate.launch"/> 
+  
+  
+  <!-- relay topic for barrelDetection Siumlation -->
+  <node name="relay_3d_scan" pkg="topic_tools" type="relay" args="/3d_cloud /mulitsensor_scan/scan_cloud" respawn="true"/>
+  
+  <!-- relay topic for flipper actuation Siumlation -->
+  <node name="relay_flipper_topic" pkg="topic_tools" type="relay" args="/obelix_robot/flipper_traj_controller/command /thor_mang/flipper_traj_controller/command" respawn="true"/>
+  
+</launch>

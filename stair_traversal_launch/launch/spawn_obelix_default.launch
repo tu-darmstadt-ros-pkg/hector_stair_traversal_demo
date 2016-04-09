@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+
+<launch>
+  <!-- Set use of simulation time to true -->
+  <param name="use_sim_time" value="true" />
+
+  <!-- send the robot XML to param server -->
+  <arg name="robot_description" default="$(find xacro)/xacro.py $(find hector_tracked_vehicles_description)/urdf/obelix_ugv_vision_box.urdf.xacro"/>
+  
+    <!-- push robot_description to factory and spawn robot in gazebo -->
+  <param name="robot_description" command="$(arg robot_description)" />
+<node name="spawn_robot" pkg="gazebo_ros" type="spawn_model"
+    args="-param robot_description
+          -urdf
+          -model robot_description
+          -x -3
+          -y 0
+          -z 0.4
+          -R 0
+          -P 0.0
+          -Y 3.14
+          "
+    respawn="false" output="screen" />
+    
+
+  <!-- start robot state publisher -->
+  <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher" output="screen" >
+    <param name="publish_frequency" type="double" value="50.0" />
+    <!--<remap from="joint_states" to="/thor_mang/joint_states" />-->
+  </node>
+  
+  
+        <!-- Load joint controller configurations from YAML file to parameter server -->
+      <rosparam file="$(find hector_tracked_vehicles_description)/config/obelix_flippers_gazebo.yaml" command="load"/>
+
+      <!-- load the controllers -->
+      <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false"
+            output="screen" ns="obelix_robot"
+            args="joint_state_controller flipper_traj_controller"/>
+
+      <node name="relay_flipper_joint_states" pkg="topic_tools" type="relay" args="/obelix_robot/joint_states /joint_states" respawn="true"/>
+      
+      
+            <node name="gazebo_laser_intensity_modifier_node" pkg="vigir_lidar_intensity_modifier" type="laser_intensity_modifier_node" output="screen">
+        <remap from="scan" to="/head_lidar/scan"/>
+        <remap from="scan_out" to="/multi_sensor_scan"/>
+      </node>
+      
+       
+  
+  
+  
+    
+  <!--<node name="relay_thor_joint_states" pkg="topic_tools" type="relay" args="/thor_mang/joint_states /joint_states" />-->
+  
+
+  
+</launch>
