@@ -2,7 +2,7 @@
 
 <launch>
   
-  <include file="$(find hector_tracked_vehicles_launch)/launch/spawn_obelix_default.launch"/>
+  <include file="$(find stair_traversal_launch)/launch/spawn_obelix_default.launch"/>
   
   <!--<include file="$(find hector_centaur_gazebo)/launch/centaur_default_controllers.launch"/> -->
   
